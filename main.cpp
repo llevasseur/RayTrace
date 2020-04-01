@@ -2,7 +2,7 @@
    By Leevon Levasseur v00868326 Feb 23, 2020
 */
 
-#include "lab.hpp"
+#include "trace.hpp"
 #include <iostream>
 #include <algorithm>
 
@@ -513,7 +513,7 @@ void Pinhole::renderScene(std::shared_ptr<World>& world) const
 				if (hit)
 				{
 					trace_data.hitPoint = ray.o + trace_data.t * ray.d;
-					pixelAverage += world->max_to_one(trace_data.material->shade(trace_data));
+					pixelAverage += trace_data.material->shade(trace_data);
 				}
 			}
 
