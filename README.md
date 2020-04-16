@@ -1,2 +1,0 @@
-# RayTrace
-Ray Traced Image
