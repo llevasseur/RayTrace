@@ -1,5 +1,5 @@
 /*
-   By Leevon Levasseur v00868326 Feb 23, 2020
+   By Leevon Levasseur April 16, 2020
 */
 
 #include "trace.hpp"
@@ -21,6 +21,26 @@ Colour World::max_to_one(Colour const& c) const
 	{
 		return (c);
 	}
+}
+
+
+
+// ***** Tracer function members *****
+Tracer::Tracer(std::shared_ptr<World> worldPtr) : 
+	mWorld_ptr{ worldPtr }
+{}
+
+
+Colour Tracer::trace_ray([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> const& ray) const
+{
+	return { 0, 0, 0 };
+
+}
+
+Colour Tracer::trace_ray([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> const& ray, 
+	[[maybe_unused]] const int depth) const 
+{
+	return { 0, 0, 0 };
 }
 
 // ***** Shape function members *****
@@ -161,6 +181,41 @@ void Light::setColour(Colour const& c)
 	mColour = c;
 }
 
+
+// ***** Whitted function members *****
+
+Whitted::Whitted(std::shared_ptr<World> world_ptr) : Tracer { world_ptr }
+{}
+
+Whitted::~Whitted()
+{}
+
+Colour Whitted::trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray, int depth) const
+{
+	if (depth > mWorld_ptr->max_depth)
+		return { 0, 0, 0 };
+	else
+	{
+		ShadeRec trace_data{};
+		trace_data.world = mWorld_ptr;
+		trace_data.t = std::numeric_limits<float>::max();
+		bool hit{};
+
+		for (auto obj : mWorld_ptr->scene)
+		{
+			hit |= obj->hit(ray, trace_data);
+		}
+
+		if (hit)
+		{
+			trace_data.depth = depth;
+			trace_data.ray = ray;
+			return (trace_data.material->shade(trace_data));
+		}
+		else return (mWorld_ptr->background);
+	}
+}
+
 // ***** Sphere function members *****
 Sphere::Sphere(atlas::math::Point center, float radius) :
 	mCentre{ center }, mRadius{ radius }, mRadiusSqr{ radius * radius }
@@ -210,7 +265,7 @@ bool Sphere::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray,
 		}
 
 		// Now the positive root
-		t = (-b + e)/denom;
+		t = (-b + e) / denom;
 		if (atlas::core::geq(t, kEpsilon))
 		{
 			tMin = t;
@@ -247,7 +302,7 @@ bool Sphere::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray,
 		}
 
 		// Now the positive root
-		t = (-b + e)/denom;
+		t = (-b + e) / denom;
 		if (atlas::core::geq(t, kEpsilon))
 		{
 			tMin = t;
@@ -262,7 +317,7 @@ bool Sphere::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray,
 // ***** Triangle function members ******
 
 Triangle::Triangle(atlas::math::Vector v0, atlas::math::Vector v1, atlas::math::Vector v2) :
-	mV0{v0}, mV1{v1}, mV2{v2}
+	mV0{ v0 }, mV1{ v1 }, mV2{ v2 }
 {}
 
 bool Triangle::hit(atlas::math::Ray<atlas::math::Vector> const& ray,
@@ -273,7 +328,7 @@ bool Triangle::hit(atlas::math::Ray<atlas::math::Vector> const& ray,
 	atlas::math::Vector v0v2{ mV2 - mV0 };
 	atlas::math::Vector N{ glm::cross(v0v2, v0v1) };
 
-	float NdotDir = glm::dot(N, -ray.d) ;
+	float NdotDir = glm::dot(N, -ray.d);
 
 	//std::cout << "Normal {" << N.x << ", " << N.y << ", " << N.z << "} ";
 
@@ -454,7 +509,7 @@ bool::Plane::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray,
 		return false;
 	}
 }
-	
+
 
 // ***** Pinhole function members *****
 Pinhole::Pinhole() : Camera{}, mDist{ 500.0f }, mZoom{ 1.0f }
@@ -634,7 +689,7 @@ void Multijittered::generateSamples()
 }
 
 // ***** Lambertian function members *****
-Lambertian::Lambertian() : 
+Lambertian::Lambertian() :
 	mDiffuseColour{}, mDiffuseReflection{}
 {}
 
@@ -672,17 +727,17 @@ GlossySpecular::GlossySpecular() :
 {}
 
 GlossySpecular::GlossySpecular(Colour diffuseColour, float exp, float diffuseReflection) :
-	mDiffuseColour{ diffuseColour }, mExp{ exp }, mDiffuseReflection{diffuseReflection}
+	mDiffuseColour{ diffuseColour }, mExp{ exp }, mDiffuseReflection{ diffuseReflection }
 {}
 
 Colour GlossySpecular::fn([[maybe_unused]] ShadeRec const& sr,
 	[[maybe_unused]] atlas::math::Vector const& reflected,
 	[[maybe_unused]] atlas::math::Vector const& incoming) const
 {
-	Colour L{0};
-	float ndotIncoming    { glm::dot(sr.normal, incoming) };
-	atlas::math::Vector r { -incoming + 2.0f * sr.normal * ndotIncoming };
-	float rdotReflected   { glm::dot(r, reflected) };
+	Colour L{ 0 };
+	float ndotIncoming{ glm::dot(sr.normal, incoming) };
+	atlas::math::Vector r{ -incoming + 2.0f * sr.normal * ndotIncoming };
+	float rdotReflected{ glm::dot(r, reflected) };
 	Colour glossyColour{ 1, 1, 1 };
 
 	if (rdotReflected > 0.0f)
@@ -696,7 +751,7 @@ Colour GlossySpecular::rho([[maybe_unused]] ShadeRec const& sr,
 	[[maybe_unused]] atlas::math::Vector const& reflected) const
 {
 	return { 0, 0, 0 };
-} //Dont think I need
+}
 
 void GlossySpecular::setExponent(float exp)
 {
@@ -713,8 +768,108 @@ void GlossySpecular::setDiffuseColour(Colour const& colour)
 	mDiffuseColour = colour;
 }
 
+// ***** PerfectSpecular function members *****
+PerfectSpecular::PerfectSpecular() :
+	mCr{}, mKr{}
+{}
+
+PerfectSpecular::PerfectSpecular(float Kr, Colour Cr) :
+	mKr{ Kr }, mCr{ Cr }
+{}
+
+Colour PerfectSpecular::sample_f([[maybe_unused]] ShadeRec const& sr,
+	[[maybe_unused]] atlas::math::Vector const& reflected,
+	[[maybe_unused]] atlas::math::Vector& incoming) const
+{
+	float ndotReflected = glm::dot(sr.normal, reflected);
+	incoming = -reflected + 2.0f * ndotReflected * sr.normal;
+
+	return (mKr * mCr / glm::dot(sr.normal, incoming));
+}
+
+Colour PerfectSpecular::fn([[maybe_unused]] ShadeRec const& sr,
+	[[maybe_unused]] atlas::math::Vector const& reflected,
+	[[maybe_unused]] atlas::math::Vector const& incoming) const
+{
+	return { 0, 0, 0 };
+}
+
+Colour PerfectSpecular::rho([[maybe_unused]] ShadeRec const& sr,
+	[[maybe_unused]] atlas::math::Vector const& reflected) const
+{
+	return { 0, 0, 0 };
+}
+
+void PerfectSpecular::set_kr(float kr)
+{
+	mKr = kr ;
+}
+
+void PerfectSpecular::set_cr(Colour cr)
+{
+	mCr = cr;
+}
+
+// ***** PerfectTransmitter function members *****
+PerfectTransmitter::PerfectTransmitter() :
+	mKt{}, mIor{}
+{}
+
+PerfectTransmitter::PerfectTransmitter(float kt, float ior) :
+	mKt{ kt }, mIor{ ior }
+{}
+
+Colour PerfectTransmitter::sample_f([[maybe_unused]] ShadeRec const& sr,
+	atlas::math::Vector const& reflected,
+	atlas::math::Vector& incoming) const
+{
+	atlas::math::Normal n{ sr.normal };
+	float cos_thetai = glm::dot(n, reflected);
+	float eta = mIor;
+
+	if (cos_thetai < 0.0)
+	{
+		cos_thetai = -cos_thetai;
+		n = -n;
+		eta = 1.0f / eta;
+	}
+
+	float tmp = 1.0f - (1.0f - cos_thetai * cos_thetai) / (eta * eta);
+	float cos_theta2 = sqrt(tmp);
+	incoming = -reflected / eta - (cos_theta2 - cos_thetai / eta) * n;
+
+	return (mKt / (eta * eta) * Colour{ 1, 1, 1 } / fabs(glm::dot(sr.normal, incoming)));
+}
+
+Colour PerfectTransmitter::fn([[maybe_unused]] ShadeRec const& sr,
+	[[maybe_unused]] atlas::math::Vector const& reflected,
+	[[maybe_unused]] atlas::math::Vector const& incoming) const
+{
+	return { 0, 0, 0 };
+}
+
+Colour PerfectTransmitter::rho([[maybe_unused]] ShadeRec const& sr,
+	[[maybe_unused]] atlas::math::Vector const& reflected) const
+{
+	return { 0, 0, 0 };
+}
+
+bool PerfectTransmitter::tir([[maybe_unused]] ShadeRec const& sr) const
+{
+	atlas::math::Vector wo{ -sr.ray.d };
+	float cos_thetai = glm::dot(sr.normal, wo);
+	float eta = mIor;
+
+	if (cos_thetai < 0.0)
+		eta = 1.0f / eta;
+
+	return (1.0f - (1.0f - cos_thetai * cos_thetai) / (eta * eta) < 0.0);
+}
+
+
+
 // ***** Matte function members *****
-Matte::Matte() : 
+Matte::Matte() :
 	Material{},
 	mDiffuseBRDF{ std::make_shared<Lambertian>() },
 	mAmbientBRDF{ std::make_shared<Lambertian>() }
@@ -760,7 +915,7 @@ Colour Matte::shade(ShadeRec& sr)
 
 		if (nDotWi > 0.0f)
 		{
-			Ray shadowRay{sr.hitPoint, wi};
+			Ray shadowRay{ sr.hitPoint, wi };
 			in_shadow = sr.world->lights[i]->inShadow(shadowRay, sr);
 
 			if (!in_shadow)
@@ -776,8 +931,8 @@ Colour Matte::shade(ShadeRec& sr)
 
 // ***** Phong function members *****
 
-Phong::Phong() : 
-	Material{}, 
+Phong::Phong() :
+	Material{},
 	mDiffuseBRDF{ std::make_shared<Lambertian>() },
 	mAmbientBRDF{ std::make_shared<Lambertian>() },
 	mSpecularBRDF{ std::make_shared<GlossySpecular>() }
@@ -833,7 +988,7 @@ Colour Phong::shade(ShadeRec& sr)
 
 		if (nDotWi > 0.0f)
 		{
-			Ray shadowRay{sr.hitPoint, wi};
+			Ray shadowRay{ sr.hitPoint, wi };
 			in_shadow = sr.world->lights[i]->inShadow(shadowRay, sr);
 
 			if (!in_shadow)
@@ -846,6 +1001,80 @@ Colour Phong::shade(ShadeRec& sr)
 
 	return L;
 }
+
+
+// ***** Reflective function members *****
+Reflective::Reflective() : Phong(), mReflectiveBRDF{ std::make_shared<PerfectSpecular>() }
+{}
+
+Reflective::Reflective(float kd, float ka, float exp, Colour colour, float kr, Colour cr) :
+	Phong(kd, ka, exp, colour), mReflectiveBRDF { std::make_shared<PerfectSpecular>(kr, cr) }
+{}
+
+Colour Reflective::shade([[maybe_unused]] ShadeRec& sr)
+{
+	using atlas::math::Ray;
+	using atlas::math::Vector;
+
+	Colour L(Phong::shade(sr)); //direct Illumination
+
+	Vector w0 = -sr.ray.d;
+	Vector wi;
+
+	Colour fr = mReflectiveBRDF->sample_f(sr, w0, wi);
+	Ray reflected_ray{ sr.hitPoint, wi };
+
+	L += fr * sr.world->tracer_ptr->trace_ray(reflected_ray, sr.depth + 1) *
+		glm::dot(sr.normal, wi);
+
+	return L;
+}
+
+// ***** Transparent function members *****
+Transparent::Transparent() : Phong(), 
+	mReflectiveBRDF{ std::make_shared<PerfectSpecular>() },
+	mSpecularBTDF{ std::make_shared<PerfectTransmitter>() }
+{}
+
+Transparent::Transparent(float kd, float ka, float exp, Colour colour, float kr, Colour cr, float kt, float ior) :
+	Phong(kd, ka, exp, colour), mReflectiveBRDF{ std::make_shared<PerfectSpecular>(kr, cr) },
+	mSpecularBTDF{ std::make_shared<PerfectTransmitter>(kt, ior) }
+{}
+
+Colour Transparent::shade([[maybe_unused]] ShadeRec& sr)
+{
+	using atlas::math::Vector;
+	using atlas::math::Ray;
+
+	Colour L{ Phong::shade(sr) };
+
+	Vector wo = -sr.ray.d;
+	Vector wi;
+	Colour fr = mReflectiveBRDF->sample_f(sr, wo, wi);
+	Ray reflected_ray{ sr.hitPoint, wi };
+
+	if (mSpecularBTDF->tir(sr))
+	{
+		L += sr.world->tracer_ptr->trace_ray(reflected_ray, sr.depth + 1);
+		// kr = 1.0;
+	}
+	else
+	{
+		Vector wt;
+		Colour ft = mSpecularBTDF->sample_f(sr, wo, wt); //computes wt
+		Ray transmitted_ray{ sr.hitPoint, wt };
+
+		L += fr * sr.world->tracer_ptr->trace_ray(reflected_ray, sr.depth + 1)
+			* fabs(glm::dot(sr.normal, wi));
+		L += ft * sr.world->tracer_ptr->trace_ray(transmitted_ray, sr.depth + 1)
+			* fabs(glm::dot(sr.normal, wt));
+	}
+
+	return (L);
+}
+
+
+
 // ***** Point Light function members *****
 
 PointLight::PointLight() : Light{}
@@ -876,9 +1105,9 @@ bool PointLight::inShadow(atlas::math::Ray<atlas::math::Vector> const& shadowRay
 {
 	float t;
 	size_t numObjects = sr.world->scene.size();
-	float d = sqrt(pow((mOrigin.x - shadowRay.o.x), 2) 
-		         + pow((mOrigin.x - shadowRay.o.x), 2)
-		         + pow((mOrigin.x - shadowRay.o.x), 2));
+	float d = sqrt(pow((mOrigin.x - shadowRay.o.x), 2)
+		+ pow((mOrigin.x - shadowRay.o.x), 2)
+		+ pow((mOrigin.x - shadowRay.o.x), 2));
 
 	for (size_t i{ 0 }; i < numObjects; ++i)
 	{
@@ -938,8 +1167,8 @@ atlas::math::Vector Ambient::getDirection([[maybe_unused]] ShadeRec& sr)
 	return atlas::math::Vector{ 0.0f };
 }
 
-bool Ambient::inShadow([[maybe_unused]]atlas::math::Ray<atlas::math::Vector> const& ray,
-	[[maybe_unused]]ShadeRec& sr) const
+bool Ambient::inShadow([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> const& ray,
+	[[maybe_unused]] ShadeRec& sr) const
 {
 	return false;
 }
@@ -954,54 +1183,75 @@ int main()
 
 	std::shared_ptr<World> world{ std::make_shared<World>() };
 
-	world->width = 600;
-	world->height = 600;
+	world->width = 1000;
+	world->height = 1000;
 	world->background = { 0, 0, 0 };
 	world->sampler = std::make_shared<Multijittered>(4, 83);
+	world->max_depth = 4;
+	world->tracer_ptr = std::make_shared<Whitted>(world);
 
+
+	//Yellow Triangle
 	world->scene.push_back(
 		std::make_shared<Triangle>(atlas::math::Vector{ -192, 40, -408 }, atlas::math::Vector{ -128, 128, -424 }, atlas::math::Vector{ -64, 100, -440 }));
 	world->scene[0]->setMaterial(
 		std::make_shared<Matte>(0.50f, 0.05f, Colour{ 1, 1, 0 }));
 	world->scene[0]->setColour({ 1, 1, 0 });
 
+	//Red Sphere
 	world->scene.push_back(
 		std::make_shared<Sphere>(atlas::math::Point{ 0, 0, -600 }, 128.0f));
 	world->scene[1]->setMaterial(
-		std::make_shared<Phong>(0.50f, 0.05f, 15.0f, Colour{ 1, 0, 0 }));
+		std::make_shared<Reflective>(0.50f, 0.05f, 100.0f, Colour{ 1, 0, 0 }, 0.75f, Colour{ 1, 1, 1 }));
 	world->scene[1]->setColour({ 1, 0, 0 });
 
+
+	//Blue Sphere
 	world->scene.push_back(
 		std::make_shared<Sphere>(atlas::math::Point{ 192, 64, -700 }, 64.0f));
 	world->scene[2]->setMaterial(
-		std::make_shared<Matte>(0.50f, 0.05f, Colour{ 0, 0, 1 }));
+		std::make_shared<Phong>(0.50f, 0.05f, 30.0f, Colour{ 0, 0, 1 }));
 	world->scene[2]->setColour({ 0, 0, 1 });
 
+
+	//Green Sphere
 	world->scene.push_back(
 		std::make_shared<Sphere>(atlas::math::Point{ -188, 64, -900 }, 64.0f));
 	world->scene[3]->setMaterial(
 		std::make_shared<Matte>(0.50f, 0.05f, Colour{ 0, 1, 0 }));
 	world->scene[3]->setColour({ 0, 1, 0 });
 
+
+	//Ground Plane
 	world->scene.push_back(
 		std::make_shared<Plane>(atlas::math::Point{ 0, 126, 0 }, atlas::math::Vector{ 0,-1,0 }));
 	world->scene[4]->setMaterial(
-		std::make_shared<Matte>(0.50f, 0.05f, Colour{ 0.30f, 0.26f, 0.0f }));
+		std::make_shared<Reflective>(0.50f, 0.05f, 50.0f, Colour{ 0.30f, 0.26f, 0.0f }, 0.25f, Colour{ 1, 1, 1 }));
 	world->scene[4]->setColour({ 0.30f, 0.26f, 0.0f });
 
+	//Light Blue Sphere
 	world->scene.push_back(
+		std::make_shared<Sphere>(atlas::math::Point{ -150, 40, -398 }, 20.0f));
+	world->scene[5]->setMaterial(
+		std::make_shared<Transparent>(0.50f, 0.05f, 2000.0f, Colour{ 0.21f, 0.32f, 0.36f }, 0.9f, Colour{ 1, 1, 1 }, 0.9f, 1.5f));
+	world->scene[5]->setColour({ 0.21f, 0.32f, 0.36f });
+
+	//Sky Plane
+	/*world->scene.push_back(
 		std::make_shared<Plane>(atlas::math::Point{ 0, 0, -10000 }, atlas::math::Vector{ 0, 0, -1 }));
 	world->scene[5]->setMaterial(
 		std::make_shared<Matte>(0.50f, 0.05f, Colour{ 0.21f, 0.32f, 0.36f }));
-	world->scene[5]->setColour({ 0.21f, 0.32f, 0.36f });
+	world->scene[5]->setColour({ 0.21f, 0.32f, 0.36f });*/
 
 
 
 	world->ambient = std::make_shared<Ambient>();
 	world->lights.push_back(
-			std::make_shared<Directional>(Directional( {0, -30, 1024} )));
+		std::make_shared<Directional>(Directional({ 0, -30, 1024 })));
 	world->lights.push_back(
-			std::make_shared<PointLight>(PointLight({ -500, -1000, 1024 })));
+		std::make_shared<PointLight>(PointLight({ -1500, -800, 1024 })));
+	world->lights.push_back(
+		std::make_shared<PointLight>(PointLight({ -500, -2000, 500 })));
 
 	world->ambient->setColour({ 1, 1, 1 });
 	world->ambient->scaleRadiance(0.50f);
@@ -1011,6 +1261,9 @@ int main()
 
 	world->lights[1]->setColour({ 1, 1, 1 });
 	world->lights[1]->scaleRadiance(6.15f);
+
+	world->lights[2]->setColour({ 1, 1, 1 });
+	world->lights[2]->scaleRadiance(6.15f);
 
 	/*world->lights[1]->setColour({ 1, 1, 1 });
 	world->lights[1]->scaleRadiance(5.0f);*/
@@ -1051,3 +1304,4 @@ void saveToFile(std::string const& filename,
 		3,
 		data.data());
 }
+

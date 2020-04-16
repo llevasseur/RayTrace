@@ -18,41 +18,62 @@ using atlas::core::areEqual;
 using Colour = atlas::math::Vector;
 
 void saveToFile(std::string const& filename,
-                std::size_t width,
-                std::size_t height,
-                std::vector<Colour> const& image);
+	std::size_t width,
+	std::size_t height,
+	std::vector<Colour> const& image);
 
 // Declarations
 class BRDF;
+class BTDF;
 class Camera;
 class Material;
 class Light;
 class Shape;
 class Sampler;
+class Tracer;
 
 struct World
 {
-    std::size_t width, height;
-    Colour background;
-    std::shared_ptr<Sampler> sampler;
-    std::vector<std::shared_ptr<Shape>> scene;
-    std::vector<Colour> image;
-    std::vector<std::shared_ptr<Light>> lights;
-    std::shared_ptr<Light> ambient;
+	std::size_t width, height;
+	Colour background;
+	std::shared_ptr<Sampler> sampler;
+	std::vector<std::shared_ptr<Shape>> scene;
+	std::vector<Colour> image;
+	std::vector<std::shared_ptr<Light>> lights;
+	std::shared_ptr<Light> ambient;
 	Colour max_to_one(Colour const& c) const;
+	std::shared_ptr<Tracer> tracer_ptr;
+	int max_depth;
+};
+
+class Tracer 
+{
+public:
+	Tracer(std::shared_ptr<World> world_ptr);
+	virtual ~Tracer() = default;
+
+	virtual Colour trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray) const;
+	virtual Colour trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const;
+
+protected:
+	std::shared_ptr<World> mWorld_ptr;
+
+private:
+	Tracer();
 };
 
 
 
 struct ShadeRec
 {
-    Colour colour;
-    float t;
-    atlas::math::Normal normal;
-    atlas::math::Ray<atlas::math::Vector> ray;
-    std::shared_ptr<Material> material;
-    std::shared_ptr<World> world;
+	Colour colour;
+	float t;
+	atlas::math::Normal normal;
+	atlas::math::Ray<atlas::math::Vector> ray;
+	std::shared_ptr<Material> material;
+	std::shared_ptr<World> world;
 	atlas::math::Point hitPoint;
+	int depth;
 };
 
 // Abstract classes defining the interfaces for concrete entities
@@ -84,101 +105,134 @@ protected:
 class Sampler
 {
 public:
-    Sampler(int numSamples, int numSets);
-    virtual ~Sampler() = default;
+	Sampler(int numSamples, int numSets);
+	virtual ~Sampler() = default;
 
-    int getNumSamples() const;
+	int getNumSamples() const;
 
-    void setupShuffledIndeces();
+	void setupShuffledIndeces();
 
-    virtual void generateSamples() = 0;
+	virtual void generateSamples() = 0;
 
-    atlas::math::Point sampleUnitSquare();
+	atlas::math::Point sampleUnitSquare();
 
 protected:
-    std::vector<atlas::math::Point> mSamples;
-    std::vector<int> mShuffledIndeces;
+	std::vector<atlas::math::Point> mSamples;
+	std::vector<int> mShuffledIndeces;
 
-    int mNumSamples;
-    int mNumSets;
-    unsigned long mCount;
-    int mJump;
+	int mNumSamples;
+	int mNumSets;
+	unsigned long mCount;
+	int mJump;
 };
 
 class Shape
 {
 public:
-    Shape();
-    virtual ~Shape() = default;
+	Shape();
+	virtual ~Shape() = default;
 
-    // if t computed is less than the t in sr, it and the color should be
-    // updated in sr
-    virtual bool hit(atlas::math::Ray<atlas::math::Vector> const& ray,
-                     ShadeRec& sr) const = 0;
+	// if t computed is less than the t in sr, it and the color should be
+	// updated in sr
+	virtual bool hit(atlas::math::Ray<atlas::math::Vector> const& ray,
+		ShadeRec& sr) const = 0;
 
 	virtual bool shadowHit(atlas::math::Ray<atlas::math::Vector> const& shadowRay,
 		float& t) const = 0;
 
-    void setColour(Colour const& col);
+	void setColour(Colour const& col);
 
-    Colour getColour() const;
+	Colour getColour() const;
 
-    void setMaterial(std::shared_ptr<Material> const& material);
+	void setMaterial(std::shared_ptr<Material> const& material);
 
-    std::shared_ptr<Material> getMaterial() const;
+	std::shared_ptr<Material> getMaterial() const;
 
 
 protected:
-    virtual bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray,
-                              float& tMin) const = 0;
+	virtual bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray,
+		float& tMin) const = 0;
 
-    Colour mColour;
-    std::shared_ptr<Material> mMaterial;
+	Colour mColour;
+	std::shared_ptr<Material> mMaterial;
 };
 
 class BRDF
 {
 public:
-    virtual ~BRDF() = default;
+	virtual ~BRDF() = default;
 
-    virtual Colour fn(ShadeRec const& sr,
-                      atlas::math::Vector const& reflected,
-                      atlas::math::Vector const& incoming) const   = 0;
-    virtual Colour rho(ShadeRec const& sr,
-                       atlas::math::Vector const& reflected) const = 0;
+	virtual Colour fn(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const = 0;
+	virtual Colour rho(ShadeRec const& sr,
+		atlas::math::Vector const& reflected) const = 0;
+};
+
+class BTDF 
+{
+public:
+	virtual ~BTDF() = default;
+
+	virtual Colour fn(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const = 0;
+
+	virtual Colour sample_f(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector& incoming) const = 0;
+
+	virtual Colour rho(ShadeRec const& sr,
+		atlas::math::Vector const& reflected) const = 0;
+
+	virtual bool tir(ShadeRec const& sr) const = 0;
 };
 
 
 class Material
 {
 public:
-    virtual ~Material() = default;
+	virtual ~Material() = default;
 
-    virtual Colour shade(ShadeRec& sr) = 0;
+	virtual Colour shade(ShadeRec& sr) = 0;
 };
 
 
 class Light
 {
 public:
-    virtual atlas::math::Vector getDirection(ShadeRec& sr) = 0;
+	virtual atlas::math::Vector getDirection(ShadeRec& sr) = 0;
 
-    virtual Colour L(ShadeRec& sr);
+	virtual Colour L(ShadeRec& sr);
 
-    void scaleRadiance(float b);
+	void scaleRadiance(float b);
 
-    void setColour(Colour const& c);
-	
+	void setColour(Colour const& c);
+
 	virtual bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray,
 		ShadeRec& sr) const = 0;
 
 
 protected:
-    Colour mColour;
-    float mRadiance;
+	Colour mColour;
+	float mRadiance;
 };
 
+
 // Concrete classes which we can construct and use in our ray tracer
+
+class Whitted : public Tracer
+{
+public:
+	Whitted(std::shared_ptr<World> world_ptr);
+	virtual ~Whitted();
+
+	Colour trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray,
+		int depth) const override;
+private:
+	Whitted();
+};
+
 
 class Sphere : public Shape
 {
@@ -287,11 +341,11 @@ public:
 	Lambertian(Colour diffuseColour, float diffuseReflection);
 
 	Colour fn(ShadeRec const& sr,
-		      atlas::math::Vector const& reflected,
-		      atlas::math::Vector const& incoming) const override; //sr, wo, wi
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const override; //sr, wo, wi
 
 	Colour rho(ShadeRec const& sr,
-		       atlas::math::Vector const& reflected) const override; //sr, wo
+		atlas::math::Vector const& reflected) const override; //sr, wo
 
 	void setDiffuseReflection(float kd);
 
@@ -313,12 +367,12 @@ public:
 		atlas::math::Vector const& incoming) const override;
 
 	Colour rho(ShadeRec const& sr,
-		atlas::math::Vector const& reflected) const override; // Dont think I need
+		atlas::math::Vector const& reflected) const override;
 
 	void setExponent(float exp);
-	
+
 	void setDiffuseReflection(float ks);
-	
+
 	void setDiffuseColour(Colour const& colour);
 
 private:
@@ -326,6 +380,85 @@ private:
 	float mDiffuseReflection;
 	float mExp;
 };
+
+
+class PerfectSpecular : public BRDF
+{
+public:
+	PerfectSpecular();
+	PerfectSpecular(float Kr, Colour Cr);
+
+	Colour fn(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const override;
+
+	Colour rho(ShadeRec const& sr,
+		atlas::math::Vector const& reflected) const override;
+
+	Colour sample_f(ShadeRec const& sr, 
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector& incoming) const;
+
+	void set_kr(float kr);
+
+	void set_cr(Colour cr);
+
+private:
+	float mKr;
+	Colour mCr;
+
+};
+
+
+class PerfectTransmitter : public BTDF
+{
+public:
+	PerfectTransmitter();
+	PerfectTransmitter(float kt, float ior);
+
+	Colour fn(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const;
+
+	Colour sample_f(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector& incoming) const;
+
+	Colour rho(ShadeRec const& sr,
+		atlas::math::Vector const& reflected) const;
+
+	bool tir(ShadeRec const& sr) const;
+
+private:
+	float mKt;
+	float mIor;
+};
+
+
+/*class FresnalTransmitter : public BTDF
+{
+	FresnalTransmitter();
+	FresnalTransmitter(float eta_in, float eta_out);
+
+	Colour fn(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector const& incoming) const;
+
+	Colour sample_f(ShadeRec const& sr,
+		atlas::math::Vector const& reflected,
+		atlas::math::Vector& incoming) const;
+
+	Colour rho(ShadeRec const& sr,
+		atlas::math::Vector const& reflected) const;
+
+	bool tir(ShadeRec const& sr) const;
+
+private:
+	float mEta_in;
+	float mEta_out;
+};*/
+
+
 
 class Matte : public Material
 {
@@ -356,7 +489,7 @@ public:
 
 	void setAmbientReflection(float k);
 
-	void setExponent(float k);
+	void setExponent(float exp);
 
 	void setDiffuseColour(Colour colour);
 
@@ -367,7 +500,37 @@ private:
 	std::shared_ptr<Lambertian> mAmbientBRDF;
 	std::shared_ptr<GlossySpecular> mSpecularBRDF;
 };
- 
+
+
+class Reflective : public Phong
+{
+public:
+	//Constructors, access functions, etc
+	Reflective();
+	Reflective(float kd, float ka, float exp, Colour colour, float kr, Colour cr);
+	virtual Colour shade(ShadeRec& sr) override;
+
+private:
+	std::shared_ptr<PerfectSpecular> mReflectiveBRDF;
+};
+
+
+class Transparent : public Phong
+{
+public:
+	//Constructors, etc.
+	Transparent();
+	Transparent(float kd, float ka, float exp, 
+		Colour colour, float kr, Colour cr, float kt, float ior);
+	virtual Colour shade(ShadeRec& sr) override;
+
+private:
+	std::shared_ptr<PerfectSpecular> mReflectiveBRDF;
+	std::shared_ptr<PerfectTransmitter> mSpecularBTDF;
+};
+
+
+
 
 class PointLight : public Light
 {
@@ -417,8 +580,6 @@ public:
 	atlas::math::Vector getDirection(ShadeRec& sr) override;
 
 	bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray,
-		ShadeRec& sr)const ;
+		ShadeRec& sr)const;
 
-private:
-	atlas::math::Vector mDirection;
 };
