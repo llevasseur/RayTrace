@@ -7,7 +7,8 @@
 
 RayTraced Image
 
-This ray traced image was coded in C++. The multi-sampled, anti-aliased image contains multiple objects with different materials, multiple lights, shadows, and a pin-hole camera 
+This ray traced image was coded in C++. The multi-sampled, anti-aliased image contains multiple objects with different materials, multiple lights, shadows, and a pin-hole camera.
+This is a continuing project to design and render impressive images. 
 
 
 ------------------------------------------------
